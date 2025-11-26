@@ -1,11 +1,23 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { ChatRequestSchema, ChatResponseSchema } from '@interview-lens/shared-types';
-import { runAgent } from './agent';
+import { createAgent } from './agent';
 
-// Load environment variables
-dotenv.config();
+// 验证必要的环境变量
+const ZHIPUAI_API_KEY = process.env.ZHIPUAI_API_KEY;
+if (!ZHIPUAI_API_KEY) {
+  console.error('❌ ZHIPUAI_API_KEY is required');
+  process.exit(1);
+}
+
+// 创建 Agent 实例
+const agent = createAgent({
+  apiKey: ZHIPUAI_API_KEY,
+  model: process.env.ZHIPUAI_MODEL || 'glm-4-flash',
+});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -22,13 +34,10 @@ app.get('/health', (_req: Request, res: Response) => {
 // Chat endpoint
 app.post('/api/chat', async (req: Request, res: Response) => {
   try {
-    // Validate request
     const validatedRequest = ChatRequestSchema.parse(req.body);
 
-    // Run agent
-    const response = await runAgent(validatedRequest.message);
+    const response = await agent.run(validatedRequest.message);
 
-    // Create response
     const chatResponse = {
       response,
       conversationId: validatedRequest.conversationId || `conv_${Date.now()}`,
@@ -36,9 +45,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
       timestamp: new Date(),
     };
 
-    // Validate response
     const validatedResponse = ChatResponseSchema.parse(chatResponse);
-
     res.json(validatedResponse);
   } catch (error) {
     console.error('Chat error:', error);
@@ -66,13 +73,11 @@ app.post('/api/chat/stream', async (req: Request, res: Response) => {
   try {
     const validatedRequest = ChatRequestSchema.parse(req.body);
 
-    // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // For now, just send a simple response
-    const response = await runAgent(validatedRequest.message);
+    const response = await agent.run(validatedRequest.message);
 
     res.write(`data: ${JSON.stringify({ type: 'token', data: response })}\n\n`);
     res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);

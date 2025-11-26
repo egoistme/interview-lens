@@ -1,16 +1,15 @@
-import { ChatOpenAI } from '@langchain/openai';
+import { ChatZhipuAI } from '@langchain/community/chat_models/zhipuai';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { RunnableSequence } from '@langchain/core/runnables';
 
 // InterviewLens - AI-powered interview replay and analysis
 
-// 初始化 LLM
-const llm = new ChatOpenAI({
-  modelName: 'gpt-4-turbo-preview',
-  temperature: 0.7,
-  openAIApiKey: process.env.OPENAI_API_KEY,
-});
+interface AgentConfig {
+  apiKey: string;
+  model?: string;
+  temperature?: number;
+}
 
 // 系统提示词
 const systemPrompt = `你是一个专业的 AI 助手，擅长帮助用户解答问题。
@@ -22,20 +21,24 @@ const prompt = ChatPromptTemplate.fromMessages([
   ['human', '{input}'],
 ]);
 
-// 输出解析器
 const outputParser = new StringOutputParser();
 
-// 创建 LangChain 链
-const chain = RunnableSequence.from([prompt, llm, outputParser]);
-
-// 运行 Agent 的辅助函数
-export async function runAgent(userMessage: string): Promise<string> {
-  const result = await chain.invoke({
-    input: userMessage,
+/**
+ * 创建 Agent 实例
+ */
+export function createAgent(config: AgentConfig) {
+  const llm = new ChatZhipuAI({
+    model: config.model ?? 'glm-4-flash',
+    temperature: config.temperature ?? 0.7,
+    apiKey: config.apiKey,
   });
 
-  return result;
-}
+  const chain = RunnableSequence.from([prompt, llm, outputParser]);
 
-// 导出链，方便扩展使用
-export { chain };
+  return {
+    run: async (message: string): Promise<string> => {
+      return chain.invoke({ input: message });
+    },
+    chain,
+  };
+}
