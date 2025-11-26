@@ -1,6 +1,7 @@
 {
   "extends": "ts-config/nextjs.json",
   "compilerOptions": {
+    "moduleResolution": "bundler",
     "paths": {
       "@/*": ["./src/*"]
     }

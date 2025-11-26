@@ -70,3 +70,9 @@ export const ApiErrorSchema = z.object({
   timestamp: z.date(),
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
+
+// Interview Analysis Types
+export const AnalyzeRequestSchema = z.object({
+  transcript: z.string().min(10, '转录文本至少需要 10 个字符'),
+});
+export type AnalyzeRequest = z.infer<typeof AnalyzeRequestSchema>;

@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'AI Agent Learning Fullstack',
-  description: 'AI Agent application with Next.js, Express, and LangGraph',
+  title: 'InterviewLens - 面试录音智能分析',
+  description: 'AI 驱动的面试录音分析工具，将面试转录文本转化为可操作的洞察报告',
 };
 
 export default function RootLayout({

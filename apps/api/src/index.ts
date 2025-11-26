@@ -3,6 +3,7 @@ dotenv.config();
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import { LangChainAdapter } from 'ai';
 import { ChatRequestSchema, ChatResponseSchema } from '@interview-lens/shared-types';
 import { createAgent } from './agent';
 
@@ -68,25 +69,76 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   }
 });
 
-// Stream chat endpoint (placeholder for future implementation)
-app.post('/api/chat/stream', async (req: Request, res: Response) => {
+// 面试转录分析端点（流式响应）
+app.post('/api/analyze', async (req: Request, res: Response) => {
   try {
-    const validatedRequest = ChatRequestSchema.parse(req.body);
+    const { prompt } = req.body;
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    if (!prompt || typeof prompt !== 'string') {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: '请提供面试转录文本',
+        statusCode: 400,
+        timestamp: new Date(),
+      });
+      return;
+    }
 
-    const response = await agent.run(validatedRequest.message);
+    if (prompt.trim().length < 10) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: '转录文本至少需要 10 个字符',
+        statusCode: 400,
+        timestamp: new Date(),
+      });
+      return;
+    }
 
-    res.write(`data: ${JSON.stringify({ type: 'token', data: response })}\n\n`);
-    res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
-    res.end();
+    // 将 AsyncGenerator 转换为 ReadableStream
+    const generator = agent.streamAnalyze(prompt);
+    const readableStream = new ReadableStream<string>({
+      async pull(controller) {
+        const { value, done } = await generator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      },
+    });
+
+    // 使用 LangChainAdapter 将流转换为 Vercel AI SDK 兼容的响应
+    const response = LangChainAdapter.toDataStreamResponse(readableStream);
+
+    // 复制响应头
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+
+    // 设置状态码
+    res.status(response.status);
+
+    // 流式传输响应体
+    if (response.body) {
+      const reader = response.body.getReader();
+      const pump = async (): Promise<void> => {
+        const { done, value } = await reader.read();
+        if (done) {
+          res.end();
+          return;
+        }
+        res.write(value);
+        return pump();
+      };
+      await pump();
+    } else {
+      res.end();
+    }
   } catch (error) {
-    console.error('Stream error:', error);
+    console.error('Analyze error:', error);
     res.status(500).json({
       error: 'Internal Server Error',
-      message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      message: error instanceof Error ? error.message : '分析过程中发生错误',
       statusCode: 500,
       timestamp: new Date(),
     });

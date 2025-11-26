@@ -13,6 +13,7 @@
     "@interview-lens/shared-types": "workspace:*",
     "@langchain/community": "^1.0.5",
     "@langchain/core": "^1.1.0",
+    "ai": "^3.0.12",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",

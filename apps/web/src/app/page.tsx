@@ -1,106 +1,85 @@
 'use client';
 
-import { useState } from 'react';
+import { useCompletion } from 'ai/react';
+import ReactMarkdown from 'react-markdown';
 import { Button } from '@interview-lens/ui';
-import type { ChatRequest, ChatResponse } from '@interview-lens/shared-types';
 
 export default function Home() {
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const sendMessage = async () => {
-    if (!message.trim()) return;
-
-    const userMessage = { role: 'user', content: message };
-    setMessages((prev) => [...prev, userMessage]);
-    setMessage('');
-    setIsLoading(true);
-
-    try {
-      const chatRequest: ChatRequest = {
-        message: message,
-        stream: false,
-      };
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(chatRequest),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      const data: ChatResponse = await response.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, an error occurred. Please try again.' },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { completion, input, setInput, handleSubmit, isLoading, error } = useCompletion({
+    api: `${process.env.NEXT_PUBLIC_API_URL}/api/analyze`,
+  });
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-8">InterviewLens</h1>
+    <main className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* 页面标题 */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">InterviewLens</h1>
+          <p className="text-gray-600">AI 驱动的面试录音智能分析工具</p>
+        </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-4 h-96 overflow-y-auto">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              Start a conversation with the AI agent
+        {/* 输入区域 */}
+        <form onSubmit={handleSubmit} className="mb-8">
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <label htmlFor="transcript" className="block text-lg font-medium text-gray-700 mb-3">
+              面试转录文本
+            </label>
+            <textarea
+              id="transcript"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="请粘贴面试转录文本...&#10;&#10;例如：&#10;面试官：请介绍一下你自己。&#10;候选人：您好，我叫张三，有3年的前端开发经验..."
+              className="w-full min-h-[200px] px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 resize-y"
+              disabled={isLoading}
+            />
+            <div className="flex justify-between items-center mt-4">
+              <span className="text-sm text-gray-500">
+                {input.length > 0 ? `已输入 ${input.length} 个字符` : '至少需要 10 个字符'}
+              </span>
+              <Button type="submit" disabled={isLoading || input.trim().length < 10}>
+                {isLoading ? '分析中...' : '开始分析'}
+              </Button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs px-4 py-2 rounded-lg ${
-                      msg.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-800'
-                    }`}
-                  >
-                    {msg.content}
-                  </div>
-                </div>
-              ))}
+          </div>
+        </form>
+
+        {/* 错误提示 */}
+        {error && (
+          <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-600">分析过程中发生错误：{error.message}</p>
+          </div>
+        )}
+
+        {/* 分析结果展示区 */}
+        {(completion || isLoading) && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              分析结果
               {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg">
-                    Thinking...
-                  </div>
-                </div>
+                <span className="inline-flex items-center">
+                  <span className="animate-pulse text-blue-500">●</span>
+                  <span className="text-sm text-gray-500 ml-2">正在分析...</span>
+                </span>
               )}
+            </h2>
+            <div className="prose prose-blue max-w-none">
+              <ReactMarkdown>{completion || '等待分析结果...'}</ReactMarkdown>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && !isLoading && sendMessage()}
-            placeholder="Type your message..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
-            disabled={isLoading}
-          />
-          <Button onClick={sendMessage} disabled={isLoading || !message.trim()}>
-            Send
-          </Button>
-        </div>
+        {/* 使用说明 */}
+        {!completion && !isLoading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-lg font-medium text-blue-800 mb-3">使用说明</h3>
+            <ul className="list-disc list-inside text-blue-700 space-y-2">
+              <li>将面试录音的转录文本粘贴到上方输入框</li>
+              <li>转录文本应包含面试官和候选人的对话内容</li>
+              <li>AI 将从沟通能力、专业能力、软技能等维度进行分析</li>
+              <li>分析结果将以流式方式实时展示</li>
+            </ul>
+          </div>
+        )}
       </div>
     </main>
   );
